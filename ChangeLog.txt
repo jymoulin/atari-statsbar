@@ -1047,3 +1047,7 @@ Les entrees anterieures au 2026-10-15 gardent les anciens noms
 - Depot git : ~/Downloads/github/atari-statsbar (separate-git-dir, le
   repertoire de travail reste ici), remote
   git@github.com:jymoulin/atari-statsbar.git, branche main.
+- README.md : presentation courte pour GitHub (qui l'affiche avant
+  README.txt), dans le style du README de StatsBar sur Mac. Les traces
+  CPNL*.TXT (et les futures SBAR*.TXT) sortent du depot : .gitignore,
+  fichiers gardes sur le disque.

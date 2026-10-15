@@ -1,1 +1,4 @@
 .DS_Store
+# traces captured on the real machine by the test tools (C:\SBAR*.TXT)
+/CPNL*.TXT
+/SBAR*.TXT

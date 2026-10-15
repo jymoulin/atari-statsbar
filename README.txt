@@ -6,11 +6,13 @@ Ex-ClockPanel (CLOCKPNL.ACC), renomme le 2026-10-15 : c'est l'equivalent
 Atari de StatsBar sur Mac (~/Documents/Dev/MacOS/statsbar), et il fait
 bien plus que l'horloge. Le ChangeLog garde les anciens noms jusqu'a
 cette date ; CPNL*.TXT a la racine sont des traces prises sur la vraie
-machine avec les anciens outils.
+machine avec les anciens outils, gardees hors du depot (.gitignore).
 Historique detaille des decisions et mesures : ChangeLog.txt.
 Depot : github.com/jymoulin/atari-statsbar (branche main). Le depot git
 est dans ~/Downloads/github/atari-statsbar (git init --separate-git-dir,
 comme sting/) : ici, .git n'est qu'un fichier qui y renvoie.
+README.md = la presentation affichee par GitHub, courte ; ce README.txt
+reste l'etat detaille du projet.
 
 OBJECTIF
 --------
