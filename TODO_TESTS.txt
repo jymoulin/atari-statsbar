@@ -1,0 +1,92 @@
+STATSBAR - tests a faire
+========================
+Mis a jour : 2026-10-15
+Binaires dans ~/Downloads/ToTest/statsbar/
+
+0. CHANGEMENT DE NOM : ClockPanel devient StatsBar
+--------------------------------------------------
+  Sur chaque machine (STE, Falcon), a la racine du disque de boot :
+  - SUPPRIMER CLOCKPNL.ACC (ou .APP) : les deux ne se reconnaissent plus,
+    garder les deux ferait deux affichages et deux hooks disque ;
+  - copier STATSBAR.ACC ;
+  - renommer CLOCKPNL.INF en STATSBAR.INF pour garder police et
+    "rapide au boot" (sinon reglages par defaut).
+  Verifier : entree "StatsBar" au menu Bureau, titre du dialogue, et
+  sous MiNT "statsbar" dans top. Les outils .TOS ecrivent maintenant
+  C:\SBAR*.TXT.
+
+Deja valide sur le STE + TwiSTEr : mode 68020 (8/24 MHz) et mode 68000
+(8/16 MHz) sous EmuTOS, MagiC et TOS 2.06 ; hook disque hdv_rw ;
+changement de police ; changement de frequence ; graphique d'E/S ;
+decalage du graphique a 8 MHz corrige ; case de fermeture du dialogue ;
+ligne de memoire libre dans le dialogue ; .APP sous TOS et EmuTOS ;
+panneau de survol (zone, switchs, restitution du fond) ; bascule
+Alternate ; binding texte maison et pile de 3 Ko.
+Valide sur Falcon 030 reel sous MagiC : accessoire, constante 68030,
+polices VGA, memoire, hook disque.
+Graphique reseau STinG vu en fonctionnement sur le STE. Couleurs des
+graphiques validees sur le Falcon. .APP sous MagiC : entree presente au
+menu Bureau.
+
+
+1. .APP SOUS MAGIC  -  demarrage silencieux
+---------------------------------------------
+  STATSBAR.ACC renomme en .APP : pas de dialogue au lancement, l'heure
+  reste affichee ; StatsBar au menu Bureau ouvre le dialogue, Quitter
+  y termine le programme.
+
+
+2. FALCON : BASCULE 8/16 MHz, RACCOURCI, REGLAGES SAUVES
+-----------------------------------------------------------
+  a) Falcon : panneau de survol et dialogue montrent maintenant 8 / 16 MHz ;
+     la bascule doit changer la frequence affichee (et la vitesse reelle).
+  b) Raccourci Ctrl + Alternate + Shift (gauche ou droit), sur le STE et
+     le Falcon : bascule lent/rapide, la frequence s'affiche 3 s a la
+     place de l'heure. Tenir la combinaison un court instant (200 ms).
+     Alternate seul montre toujours les graphiques.
+  c) Dialogue : case "rapide au boot" sous la vitesse. Cocher, OK, puis
+     regarder C:\STATSBAR.INF (BOOTFAST=1) ; repasser en lent puis
+     rebooter -> l'accessoire doit repartir en rapide. Utile surtout sur
+     le STE (le TOS du Falcon demarre deja a 16 MHz).
+  d) Police : la choisir (dialogue ou panneau), rebooter : elle doit etre
+     conservee. FONT= est vide pour la police des menus.
+  Le .INF se lit et se corrige a la main ; le supprimer = reglages par
+  defaut.
+
+
+3. COUT CPU SOUS MINT + XAAES, ET SURVOL  -  nouvelle version
+---------------------------------------------------------------
+Le graphique CPU a ete vu sur le Falcon. jtop donnait 11 % a statsbar ;
+mesure sous Hatari et reduit de 57 %.
+
+  a) FAIT : jtop donne ~6 % sur le Falcon (11 % avant), puis 3,5 % avec
+     le noyau 1-20-cur. NOUVELLE VERSION (12/10) : au repos, le
+     graphique CPU plat n'est plus redessine chaque seconde ; attendu
+     ~2,5 % au repos (-25 %), un peu moins qu'avant sous charge.
+     Verifier aussi que le graphique CPU suit toujours la charge : lancer
+     un travail (copie, compilation), il doit monter puis redescendre et
+     redevenir une ligne plate 32 s apres, sans trace.
+  b) SURVOL, a refaire sous TOS 2.06, MagiC et XaAES : la position de
+     la souris vient maintenant d'evnt_multi au lieu de graf_mkstate.
+     Le panneau doit s'ouvrir sur l'heure (ou le graphique), pas ailleurs.
+     Le clipping VDI a change : le panneau doit etre entier, et le fond
+     (fenetres, bureau) doit revenir intact quand il se referme.
+  c) Le pointeur passe sur l'heure pendant que le graphique avance : pas
+     de trace laissee par la souris.
+  d) NOUVELLE VERSION (15/10). Sous XaAES + Thing, changer
+     d'application, se servir des menus de Thing : quand la barre est
+     redessinee, notre coin doit revenir en ~0,2 s (1 s au plus si
+     personne ne touche la souris ni le clavier), avec TOUT l'historique
+     du graphique, pas un graphique qui repart de zero, et l'heure.
+     Meme chose la souris posee dans la barre, sur les menus.
+     Plus de flash de l'heure toutes les 5 s.
+
+
+Notes
+-----
+- Les outils .TOS attendent une touche et ecrivent aussi leur trace dans
+  C:\SBAR*.TXT, reecrite ligne a ligne pour survivre a un plantage.
+- DISKTST et STRESS sont en LECTURE SEULE. Ils prennent C: par defaut,
+  se rabattent sur A: si C: n'a pas de BPB, et acceptent une lettre en
+  argument ("STRESS A").
+- MEMTST n'alloue que 64 Ko, aussitot liberes.

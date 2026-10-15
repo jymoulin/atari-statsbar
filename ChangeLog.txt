@@ -1,0 +1,1049 @@
+ChangeLog - statsbar (ex-clockpanel)
+====================================
+Les entrees anterieures au 2026-10-15 gardent les anciens noms
+(ClockPanel, CLOCKPNL.ACC, cpnl_, CPNL_).
+
+2026-09-13
+- Creation du projet.
+- Analyse comparative des features de Joy Clocky 4.x, LED-Panel 3.1 et
+  MenuInfo 2.50 ; resultat consigne dans README.txt.
+
+2026-09-14
+- Squelette du projet : Makefile (cross-gcc MiNT ELF /opt/cross-mint),
+  sources dans src/, script de test Hatari dans test/.
+- Affichage VDI dans le coin de la barre de menu : heure hh:mm, CapsLock,
+  frequence CPU a la place de l'heure tant qu'Alternate est maintenu.
+- probe.S : mesure de vitesse CPU sur le compteur 200 Hz, et sonde du
+  registre $FFFF8E21 protegee d'une bus error (detection carte 16 MHz).
+- diskhook.S : handler hdv_rw avec en-tete XBRA, comptage des appels, des
+  secteurs lus/ecrits et des lecteurs touches ; installation et retrait
+  avec parcours de la chaine XBRA.
+- disk.c : temoins R/W avec remanence, volume cumule en Ko.
+- Bascule 8/16 MHz + cache depuis le menu Bureau (AC_OPEN).
+- Corrige : largeur du texte calculee en cellules (v_gtext) et non avec
+  vqt_extent, qui laissait un fragment de glyphe non efface.
+- Corrige : la frequence n'est plus deduite de la mesure. Le rapport
+  cycles/instruction du 68030 rendait le calcul faux (58 MHz annonces sur
+  un Falcon a 16 MHz). La mesure devient un indice de performance.
+- Valide sous Hatari : boot ST/STE/MegaSTE/Falcon, affichage et horloge,
+  detection _MCH et $FFFF8E21, bascule 16 MHz effective (477 -> 1096),
+  comptage disque et desinstallation du handler.
+- Police : selection via vst_point() et non vst_height(). vst_height() met
+  la police systeme a l'echelle et rendait une cellule 11x10 la ou les
+  menus font 8x8 (et de la bouillie en dessous de 6 pixels). vst_point()
+  ne retient que les tailles natives du VDI : 6x6, 8x8, 8x16.
+  Deux modes : police des menus GEM (defaut) ou la taille juste en dessous.
+  Bascule a chaud depuis le dialogue du menu Bureau.
+- Corrige : le rectangle d'effacement couvrait toute la hauteur de la barre
+  de menu et effacait le trait de separation dessine par l'AES sur toute la
+  largeur de la zone. On preserve desormais la derniere ligne (effacement,
+  clip et centrage vertical calcules sur bar_h - 1).
+- Outils de test : sortie dupliquee dans un fichier (C:\CPNLSPD.TXT,
+  CPNLDSK.TXT, CPNLFNT.TXT) pour pouvoir les relire sur machine reelle.
+- Corrige SPEEDTST : il laissait $FFFF8E21 a 0 (8 MHz sans cache) au lieu
+  de restaurer l'etat trouve au lancement.
+- Corrige DISKTST : plus aucun acces en ecriture. L'ancienne version
+  ecrivait un secteur sur le lecteur A:, et testait A: au lieu de C:.
+- Garde anti-doublon : appl_find("CLOCKPNL") au demarrage, pour eviter deux
+  handlers hdv_rw et deux affichages superposes si l'ACC et l'APP tournent
+  en meme temps.
+- DISKTST plantait avec deux bombes sur machine reelle : il lisait DEUX
+  secteurs dans un tampon de 1 Ko en supposant 512 octets par secteur. Sur
+  une partition Atari un peu grosse, un secteur logique fait 1024, 2048 ou
+  4096 octets, donc la lecture debordait et ecrasait la memoire. Le test
+  interroge desormais le BPB, refuse de lire si le secteur ne tient pas
+  dans le tampon (8 Ko), ne lit qu'un seul secteur, et accepte la lettre
+  du lecteur en argument.
+- Les traces de test sont refermees et rouvertes en ajout apres chaque
+  ligne : le fichier reste exploitable meme si le programme plante.
+- Pause clavier en fin de test, la sortie console disparaissait sous
+  EmuCON2 au retour au shell.
+
+2026-09-15
+- Les outils de test sont desormais des programmes TOS (.TOS) et non GEM
+  (.PRG) : en .PRG le bureau les lance en mode GEM, affiche la sortie dans
+  une fenetre de 40 colonnes qui tronquait les lignes, et rendait la main
+  aussitot. En .TOS l'ecran texte reste affiche en pleine largeur.
+- Lignes de trace raccourcies a moins de 40 colonnes.
+- CAUSE RACINE des deux bombes : l'option -mshort. La toolchain ne fournit
+  pas de libc compilee en int 16 bits (seuls mshort/libgem.a et
+  mshort/libm.a existent, pas mshort/libc.a), donc -mshort liait une libc
+  en int 32 bits. Tout appel libc passant un int decalait les arguments
+  suivants : memset(recsiz, 0, 64) poussait le 0 sur 2 octets, la libc en
+  lisait 4, recevait une taille aberrante et ecrivait hors memoire.
+  Le defaut existait depuis le debut mais restait latent : il n'a eclate
+  qu'en introduisant memset/memcpy avec les compteurs par lecteur.
+  -mshort est supprime du Makefile. gemlib declare ses parametres en short
+  explicite, donc rien a changer cote GEM.
+- Comptage des secteurs par lecteur (cpnl_rw_rd_drv/wr_drv, 32 entrees) :
+  la taille de secteur varie d'un lecteur a l'autre, 512 sur disquette mais
+  8192 sur la partition C: de la machine de test. Le volume est desormais
+  cumule au fil de l'eau, taille de secteur lue une fois par lecteur via
+  Getbpb, avec repli a 512.
+- Dialogue : bouton "Fermer" toujours present et par defaut, pour ressortir
+  sans rien modifier. Le choix de vitesse passe par un second dialogue,
+  annulable lui aussi (form_alert est limite a trois boutons).
+- test/mkfloppy.py : fabrique une image disquette FAT12 amorcable, pour
+  tester le BIOS sans l'emulation GEMDOS de Hatari qui court-circuite
+  hdv_rw.
+- STRESS.TOS : 300 lectures enchainees pour valider le handler hors GEM.
+
+2026-09-16
+- Validation sur STE + TwiSTEr reel, apres suppression de -mshort :
+  * STRESS : 300 lectures -> calls=306 rd=300 rd_drv[0]=300 map=5,
+    remove=0. Le handler tient la charge et se retire proprement.
+    (calls > 300 et map bit 2 : les ecritures du fichier de trace sur C:)
+  * DISKTST : plus de bombes, recsiz=8192 confirme, Rwabs -> 0, remove=0,
+    vecteur $476 restaure a l'identique.
+  * SPEEDTST : $FFFF8E21 bien restaure a 3 en sortie.
+- Constat a garder en tete : avec des secteurs de 8192 octets, la moindre
+  ecriture coute 8 Ko d'E/S. Les 6 lignes de trace de DISKTST ont genere
+  18 secteurs ecrits, soit 144 Ko. Le compteur Ko affichera donc des
+  volumes eleves sur cette machine : c'est exact, pas un bug.
+- La frequence "rapide" n'est plus codee en dur a 16 MHz. Le bit 1 de
+  $FFFF8E21 dit seulement "rapide" ou "lent", jamais combien de MHz : la
+  valeur depend de la carte. Elle est desormais deduite du cookie _CPU
+  (68000 -> 16, 68020 -> 24 pour le TwiSTEr, 68030+ -> 32) et exposee dans
+  SYSTEM.mhz_slow / mhz_fast pour rester surchargeable. Le sous-dialogue
+  de vitesse affiche ces deux valeurs au lieu de "8 MHz / 16 MHz" fixes.
+- SPEEDTST mesure les QUATRE combinaisons du registre pour separer l'effet
+  de l'horloge de celui du cache, et affiche les rapports en centiemes.
+  Sur MegaSTE emule : lent 477, lent+cache 477, rapide 480, rapide+cache
+  1096. Passer a 16 MHz sans cache ne gagne donc rien, le 68000 restant
+  bloque sur un bus a 8 MHz : l'indice ne suit pas l'horloge, et ne peut
+  pas servir a deduire une frequence.
+
+2026-09-17
+- Mesure des quatre combinaisons de $FFFF8E21 sur STE + TwiSTEr en mode
+  68020 (sous Geneva/TeraDesk) :
+    lent 944 / lent+cache 944 / rapide 2810 / rapide+cache 2810
+  => rapport d'horloge 2,97 A CACHE CONSTANT dans les deux sens : le boost
+     est bien x3, soit 24 MHz. Les 3 % manquants viennent de la lecture de
+     $4BA dans la boucle externe, qui reste a la vitesse du bus.
+  => le bit 0 (cache) n'a AUCUN effet sur cette carte : le 68020 a son
+     cache instruction interne, pilote par CACR et non par $FFFF8E21. Sur
+     MegaSTE le meme bit fait passer de 480 a 1096.
+  => le bit 1 est bien pilotable par logiciel sur le TwiSTEr, le switch
+     materiel ne fait qu'autoriser le boost.
+  La table _CPU -> frequence (20 -> 24 MHz) est donc confirmee.
+- Trois releves sur STE + TwiSTEr sous TOS 2.06 nu :
+    68000 sans switch (8E21=0) : 477/477/480/480, tous rapports a 100
+    68000 avec switch (8E21=2) : identique, rapports a 100
+    68020 avec switch (8E21=0) : 955 lent, 2813 rapide, rapport 294
+  => en mode 68000 le registre est totalement INERTE sur cette carte : le
+     bit 1 reflete le switch materiel mais ne change ni horloge ni cache.
+     La machine reste a 8 MHz (477, la reference exacte).
+  => en mode 68020 le registre pilote bien l'horloge, x3 confirme.
+  => sous TOS nu le registre vaut 0 au repos : la machine demarre a 8 MHz,
+     c'est un programme de l'AUTO qui enclenche le boost sous Geneva.
+- La frequence affichee n'est plus deduite du registre mais MESUREE quand
+  la famille de CPU le permet (68020 et au-dela : le cache instruction
+  interne rend l'indice lineaire avec l'horloge, 25 points base-100 par MHz
+  calibres sur le TwiSTEr). Se fier au registre affichait 16 MHz sur une
+  machine qui tournait a 8. Le MegaSTE garde la voie registre, fiable car
+  machine connue. La mesure est invalidee apres chaque bascule.
+- Limite : l'emulation 68020 de Hatari n'est pas fidele (1915 a 8 MHz
+  contre 955 sur materiel reel, soit le double). La constante 68020 ne peut
+  etre calibree que sur machine reelle.
+- Compteur de Ko confirme fonctionnel sur machine reelle.
+- Le refus de copier le .ACC est un comportement de Geneva, pas un defaut
+  du fichier ni de son extension. Sujet clos.
+- Mesure de frequence refondue sur la methode differentielle de C. Zietz
+  (000CLOCK.TOS), identifiee en desassemblant le programme : on chronometre
+  deux boucles ne differant que par une instruction de meme taille (nop vs
+  mulu.w), et la soustraction elimine tout ce qui depend du bus. Une seule
+  constante par famille de CPU : l'ecart de cycles entre les deux
+  instructions (41 sur 68000, ~26 sur 68020/030 a confirmer).
+  Verifie sous Hatari, cycle-exact sur 68000 :
+    ST 8 MHz                       -> 7,8 MHz
+    MegaSTE 16 MHz SANS cache ext. -> 15,3 MHz   (ancien indice : 480,
+                                                  soit aucun gain detecte)
+    MegaSTE 16 MHz AVEC cache ext. -> 16,0 MHz
+  La methode voit donc les 16 MHz meme cache eteint, ce dont l'ancienne
+  boucle etait incapable par construction.
+- CENTBNCH.APP desassemble aussi : sa routine de frequence lit $FFFFA204 et
+  $FFFFA202, registres propres a la carte Centek. Inapplicable ailleurs.
+- Mesures rendues paresseuses : ni l'indice ni la frequence ne sont calcules
+  au demarrage (100 a 300 ms chacun). La frequence n'etant affichee qu'a la
+  demande, elle est mesuree au premier besoin puis conservee, et invalidee
+  apres une bascule de vitesse.
+- Precision de vocabulaire : le 68000 n'a aucun cache interne. Le bit 0 de
+  $FFFF8E21 pilote le cache EXTERNE de 16 Ko de la carte mere du MegaSTE.
+  Sur 68020 c'est le cache instruction interne qui joue, sans rapport avec
+  ce registre.
+
+2026-09-18
+- CORRIGE : l'accessoire affichait 246 MHz sur un 68020 a 24 MHz. La
+  formule de SPEEDTST rend des DIXIEMES de MHz ; recopiee dans
+  l'accessoire, elle y etait lue comme des MHz, d'ou un facteur 10. La
+  constante 68020 n'y etait pour rien.
+  Cause de fond : deux copies de la meme formule. Elle vit desormais dans
+  src/mhz.h, inclus par l'accessoire ET par SPEEDTST, qui ne peuvent plus
+  diverger.
+- Constante 68020 calibree sur TwiSTEr reel : 26,4 cycles, obtenue
+  identique a 8 MHz (tops=33) et a 24 MHz (tops=11). La valeur provisoire
+  26 tiree des tables Motorola etait juste. Les ecarts sont maintenant
+  exprimes en centiemes de cycle (delta100) : 68000 = 4050, 68020 = 2640.
+- 68000 : 40,0 mesure sur STE reel (tops=50 a 8 MHz, 25 a 16 MHz), 40,8
+  sous Hatari. 40,5 retombe juste dans les deux cas.
+- Validation sur materiel reel en mode 68000 : 8,0 et 16,0 MHz exacts,
+  alors que l'indice vaut 542 a 8 MHz (contre 477 pour un STE d'origine,
+  la carte ayant une memoire plus rapide). L'ancienne methode aurait
+  affiche 9 MHz : la methode differentielle, insensible au bus, dit 8,0.
+- Constat : cette fois en mode 68000 le registre bascule reellement 8 -> 16
+  MHz, alors qu'il etait inerte au releve precedent. La mesure voit juste
+  dans les deux cas sans qu'il soit necessaire de comprendre la carte.
+- Nouvelle cible "make verify" : VERIFY.ACC affiche les MHz en permanence,
+  pour controler dans Hatari le chemin d'affichage complet (impossible de
+  maintenir Alternate dans l'emulateur). Verifie : 8MHz a 8 MHz et 16MHz a
+  16 MHz. C'est ce controle qui manquait et aurait revele le facteur 10.
+- Le script de test n'installe plus que CLOCKPNL.ACC : il copiait tous les
+  *.ACC, VERIFY.ACC compris, et deux accessoires se chargeaient.
+
+2026-09-18 (suite)
+- CORRIGE : la frequence baissait si l'on bougeait la souris ou tapait
+  pendant la mesure, et tombait parfois a 17 MHz au lieu de 24 sous MagiC.
+  Cause : les interruptions (clavier, souris, ordonnanceur de MagiC)
+  volaient du temps pendant la mesure d'un seul bloc, surtout dans la
+  boucle mulu.w, plus longue ; l'ecart etait gonfle, la frequence
+  sous-estimee. Avec une base de temps de 5 ms ($4BA), 7 tops voles sur 22
+  suffisaient a passer de 24 a 17 MHz.
+- Nouvelle mesure (cpnl_probe_pair + src/measure.c) : nombreuses tranches
+  courtes, interruptions MASQUEES pendant chaque tranche seulement (~0,3 ms,
+  sous la duree d'un octet clavier ou MIDI : on ne perd aucun code de
+  touche), chronometrees sur le compteur du Timer C du MFP ($FFFFFA23,
+  38400 Hz, resolution 26 us au lieu de 5 ms). Les interruptions en attente
+  passent entre deux tranches, hors chronometre. On cumule ~100 ms de
+  tranches mulu.w.
+  Timer C : 2457600 / 64 / 192 est la seule programmation qui donne
+  exactement 200 Hz avec les prescalers du MFP ; le rechargement a 192 est
+  donc garanti des que _hz_200 est juste.
+  Garde-fous : paire ecartee si une tranche depasse 150 coups ; repli sur
+  l'ancienne mesure d'un bloc si moins de 16 paires valides.
+- La mesure vit dans src/measure.c, partagee avec SPEEDTST : le test
+  valide directement ce que l'accessoire affiche.
+- Constante 68000 corrigee : 40,0 cycles (4000). La mesure en tranches
+  donne 39,97 sous Hatari, exactement la theorie (mulu.w 44 - nop 4). Les
+  40,8 de l'ancienne methode etaient deja ce biais d'interruptions.
+- Resultats sous Hatari :
+    ST 8 MHz          : 8,1 MHz sur 6 mesures, ecart min-max 0,0
+    MegaSTE 8 / 16    : 8,0 / 16,3 sans cache ext. / 15,9 avec
+    Falcon, TT        : aucun plantage, mesures stables, rapport TT/Falcon
+                        de 1,99. Valeurs absolues fausses : constante
+                        68030 provisoire, et temporisation 020/030 de
+                        Hatari non fidele. A calibrer sur Falcon reel.
+- SPEEDTST : serie de six mesures dans l'etat courant pour controler la
+  stabilite en bougeant la souris, puis detail de chaque mesure (n,
+  paires, cumuls A et B) permettant de recalculer la constante.
+
+2026-09-18 (graphique E/S)
+- Nouvel indicateur d'E/S disque : graphique "papillon" de 32 x hauteur
+  utile de la barre de menu, place a gauche du texte. Une colonne par
+  periode de 200 ms, soit 6,4 s d'historique ; lectures au-dessus d'une
+  ligne mediane, ecritures en dessous. Echelle logarithmique (chaque pixel
+  double le volume) : 1 pour moins de 2 Ko par periode, plafond a 128 Ko
+  par periode (640 Ko/s). 8 px par sens en 640x400, 4 px en 320x200.
+  Remplace par defaut les lettres R/W et le compteur de Ko, qui restent
+  disponibles dans la configuration.
+- Mesure de la place sur l'ecran de jym (640x400 mono, TOS 2.06 FR) :
+  18 px de hauteur utile, ~250 px libres entre le menu "Options" et
+  l'affichage.
+- Rendu incremental : a chaque periode, une copie ecran a ecran decale le
+  graphique d'un pixel (vro_cpyfm) et seule la nouvelle colonne est
+  dessinee, en UN rectangle couvrant lecture, mediane et ecriture. Aucun
+  dessin tant que le graphique reste plat. Le redessin complet periodique
+  (colonnes identiques fusionnees) rattrape une barre de menu ecrasee par
+  une application.
+- Separation dsp_tick() / dsp_update() : l'historique n'avance qu'une fois
+  par top de timer ; les redessins supplementaires (redraw, sortie de
+  dialogue) ne le decalent plus.
+- disk_poll() rend desormais les octets lus et ecrits par periode, avec la
+  taille de secteur de chaque lecteur, et plus seulement quand le compteur
+  de Ko est affiche.
+- measure.c : calcul final ramene en 32 bits (cycles * 48 / (diff * 125)).
+  La division 64 bits tirait ~2,4 Ko de libgcc. Resultats identiques.
+- IOGEN.PRG (make iogen) : application GEM generant des salves de lecture
+  et d'ecriture sur A:, pour voir le graphique s'animer sous Hatari. Un
+  programme TOS ne convient pas : il bloque les accessoires tant qu'il
+  tourne. ECRIT sur A:, reserve a l'emulateur.
+- Limite connue, commune a tout accessoire : sous TOS mono-tache, une
+  application qui ne rend pas la main a l'AES prive l'accessoire
+  d'evenements. Le graphique se fige alors et rattrape l'activite d'un
+  coup quand elle rend la main (comme l'heure). Pas de souci sous MagiC,
+  Geneva ou MiNT.
+
+2026-09-21
+- CORRIGE, GRAVE : sous Geneva, un appui sur Alternate (qui declenche la
+  premiere mesure de frequence) gelait presque la machine, souris
+  erratique. Defaut de conception : la duree d'une tranche masquee n'etait
+  bornee que par le compteur du Timer C. Si celui-ci ne se comporte pas
+  comme prevu, la calibration doublait n jusqu'a 16384, soit ~25 ms
+  interruptions masquees a 24 MHz ; un octet clavier arrive toutes les
+  1,28 ms, les paquets souris se desynchronisaient. Puis jusqu'a 2000
+  paires, soit des dizaines de secondes.
+  Correctifs, qui ne dependent plus du compteur :
+  * n plafonne par famille de CPU pour ne jamais depasser ~1 ms masquee
+    a 8 MHz (128 tours sur 68000, 256 sur 68020+) ;
+  * compteur juge inerte si une tranche de taille maximale dure moins de
+    2 coups : abandon immediat ;
+  * duree totale bornee a 300 ms par _hz_200 ;
+  * trop de lectures aberrantes : abandon ;
+  * dans tous ces cas, repli sur la mesure d'un bloc, interruptions
+    autorisees : moins precise, mais incapable de geler la machine.
+  Cible "make deadtest" : SPEEDTST dont le compteur est un octet de ROM.
+  Resultat sous Hatari : repli detecte des la calibration, 285 ms au
+  total, 7,7-8,0 MHz, aucun gel.
+  La cause exacte sous Geneva reste inconnue : SPEEDTST affiche desormais
+  un releve brut du compteur et la cause d'un eventuel repli.
+- Mesure raccourcie : 1920 coups de tranches mulu.w au lieu de 3840, soit
+  ~90 ms au lieu de ~200 sous Hatari, pour une precision inchangee grace
+  a la resolution de 26 us du compteur.
+- Graphique d'E/S ralenti a la demande : une colonne par SECONDE
+  (cfg.graph_period = 5 periodes de 200 ms), 32 colonnes = 32 s
+  d'historique. La colonne de droite est vivante : elle monte au fil de la
+  seconde en cours, le graphique reagit donc toujours immediatement. Echelle
+  ramenee a un debit par seconde, independante de graph_period : 1 jusqu'a
+  8 Ko/s, plafond a 1 Mo/s.
+- Organisation, conformement aux consignes : tout le genere (objets,
+  binaires, images disquette, captures, disque C: de Hatari) va dans
+  /tmp/clockpanel. "make totest" copie dans ToTest/ les binaires a tester
+  sur la vraie machine, apres l'avoir vide. Le repertoire build/ et les
+  objets de src/ ont ete retires du depot.
+- Releves SPEEDTST sur STE + TwiSTEr 68020 a 24 MHz (GNVA.LOG, MAGIC.LOG,
+  TOS206.LOG) :
+  * Geneva : plus de gel ni de souris erratique. Le garde-fou a joue.
+  * La mesure en tranches sur Timer C est FAUSSE sur cette carte :
+    - TOS et Geneva : calib=0 ou 1 ; deux lectures du compteur a ~300 us
+      d'intervalle, interruptions masquees, rendent la meme valeur.
+      Rejetee a juste titre, repli sur la mesure d'un bloc (22-23 MHz).
+    - MagiC : acceptee mais fausse, 15,3 MHz au lieu de 24 et 6,3 au lieu
+      de 8, sans qu'aucun garde-fou ne la detecte. Le rapport rapide/lent
+      y vaut 2,43 alors que l'horloge est x3 : les tranches ne mesurent
+      donc pas du temps CPU pur.
+    Le releve brut du compteur, lu a intervalles espaces interruptions
+    autorisees, est pourtant normal (1..190). Les lectures du MFP en boucle
+    serree, interruptions masquees, ne refletent pas le temps reel sur la
+    TwiSTEr. Cause exacte inconnue ; non reproductible sous Hatari.
+- En consequence, la mesure en tranches est RETIREE de l'accessoire et de
+  probe.S. Retour a la mesure d'un bloc sur _hz_200, interruptions
+  autorisees (aucun risque de gel), celle qui avait donne exactement 8,0
+  et 24,0 MHz sur la TwiSTEr.
+- Estimateur : MEDIANE de trois passes. Elle ecarte une passe perturbee
+  par des interruptions. Le minimum, essaye d'abord, est biaise vers le
+  haut : avec 5 ms de resolution chaque passe varie de +/- 1 top et le
+  minimum retient la plus favorable (16,9 MHz, arrondi a 17, sur MegaSTE
+  a 16 MHz). Sous Hatari : ST 7,8-8,1 ; MegaSTE sans cache 15,6.
+- Constante 68000 revenue a 4050 : etablie avec cette methode, qui integre
+  le cout normal des interruptions (40,0 reel, 40,8 Hatari).
+- La mesure dure ~0,85 s sur un 68000 a 8 MHz (prix de la resolution de
+  5 ms). Elle est donc faite AU DEMARRAGE de l'accessoire, inapercue au
+  chargement ; l'appui sur Alternate devient instantane.
+- Le cache de frequence est invalide si $FFFF8E21 change : un autre
+  programme, comme le SPEED.PRG de la TwiSTEr (Ctrl+Alt+/-), a pu changer
+  la vitesse. Verification par un simple Supexec a chaque affichage.
+- Cible "deadtest" retiree, avec le code des tranches.
+- Releves SPEEDTST (mediane de trois passes) sur la TwiSTEr 68020 :
+    TOS 2.06 : 23,5 MHz a 24, 7,3 a 8
+    MagiC    : 21,1-22,6 a 24, 7,0 a 8
+    Geneva   : 21,8 a 24, 6,6 a 8
+  Les passes sont tres stables (29/29/29, 27/27/27) : ce n'est pas du
+  bruit mais un BIAIS SYSTEMATIQUE dependant de l'environnement. Les
+  gestionnaires d'interruption du systeme prennent une part fixe du temps
+  CPU, qu'une mesure faite interruptions autorisees ne peut pas exclure. Il
+  est plus fort a 8 MHz, un gestionnaire au cout fixe en cycles pesant plus
+  lourd sur un CPU lent. Sous TOS a 8 MHz, 10 % de plus qu'au releve du 18 :
+  quelque chose consomme davantage en tache de fond (pilote ajoute ?).
+- En consequence, la frequence affichee est desormais CLASSEE vers une
+  valeur nominale (mhz_snap, dans mhz.h) : la plus petite de 8, 16, 24,
+  32, 40, 50, 66, 80, 100 superieure ou egale a la mesure moins 7 %. Le
+  biais ne faisant que sous-estimer, et la tolerance de 7 % couvrant
+  l'erreur d'arrondi du compteur, tous les releves reels et emules tombent
+  juste, y compris le 16,9 du MegaSTE qui s'arrondissait a 17. Confondre 24
+  et 16 demanderait un biais de plus de 25 %.
+- Mesure raccourcie : ~21 tops vises au lieu de 25 (0,71 s au lieu de 0,85
+  sur 68000 a 8 MHz), et ajustement PROPORTIONNEL de n quand la premiere
+  passe est trop courte. Le facteur entier arrondi par exces depassait la
+  cible : 1,6 s ramenees a 1,2 s sur MegaSTE a 16 MHz.
+- SPEEDTST affiche la mesure brute et la frequence classee ("23,5 MHz ->
+  24").
+
+2026-09-22
+- Optimisation de taille : abandon de la startup MiNTLib au profit d'un
+  demarrage minimal, src/crt0.S. La startup a elle seule faisait entrer
+  localtime (16 Ko !), stdio, malloc, la lecture de /etc/passwd et de
+  /etc/group : du code jamais execute, mais resident tant que
+  l'accessoire est charge.
+      CLOCKPNL.ACC  65 944 -> 12 417 octets sur disque
+                    69 340 -> 22 256 octets residents (dont 8 Ko de pile)
+      SPEEDTST.TOS  57 020 ->  3 458      DISKTST.TOS  56 580 ->  2 943
+      FONTTST.TOS   57 433 ->  3 806      STRESS.TOS   56 042 ->  2 413
+  Le lien passe en -nostdlib ; ne restent que libgem et libgcc (divisions
+  et multiplications 32 bits du 68000).
+- crt0.S fournit les trois seules fonctions libc encore utilisees, par
+  nous et par libgem : memcpy (mot a mot quand les deux pointeurs sont
+  pairs), memset et strlen.
+- PIEGE : un accessoire n'est PAS lance comme un programme. L'AES passe la
+  basepage dans A0 et ne prete aucune pile utilisable ; lire 4(sp) fait
+  une bus error (a7 = 0, deux bombes au boot). Un programme, lui, a sa
+  basepage en 4(sp). crt0.S distingue les deux comme le fait la MiNTLib :
+  A0 non nul et p_parent nul = accessoire. Dans les deux cas on bascule
+  aussitot sur une pile de 8 Ko prise dans le BSS, donc a l'interieur du
+  bloc conserve par le Mshrink.
+- probe.S : cpnl_cookie_get, parcours du cookie jar sous Supexec, en
+  remplacement du Getcookie() de la MiNTLib qui aurait ramene la libc.
+  Utilise par sysinfo.c et par SPEEDTST.
+- disktst.c : le lecteur a tester se lit maintenant dans la queue de
+  commande de la basepage (offset 0x80) et non dans argv, que le
+  demarrage minimal ne construit pas.
+- Valide sous Hatari avec le nouveau demarrage : boot STE couleur et
+  mono sans bombe, heure et graphique affiches, trait de separation
+  intact, VERIFY.ACC affiche 8MHz sur MegaSTE, SPEEDTST rend les memes
+  mesures qu'avant (8,1/7,7 MHz -> 8, cookies _MCH et _CPU lus),
+  STRESS depuis disquette calls=300 rd=300 rd_drv[0]=300 map=1,
+  retrait du handler -> 0, DISKTST sans argument tombe bien sur C:.
+
+2026-09-22 (suite)
+- Corrige : le choix "police plus petite" rendait une police PLUS GROSSE.
+  Au-dela de la police des menus, vst_point() ne rend plus des tailles
+  gravees mais des versions mises a l'echelle, plus LARGES : en 640x400
+  (menus 8x16) il rend 12x12, 16x16 puis 16x32. Le critere ne portait que
+  sur la hauteur, et 12x12 passait donc pour "plus petit" que 8x16. Le
+  test porte maintenant sur les DEUX dimensions : ne sont retenues que
+  les tailles dont la cellule tient dans celle des menus. Il en reste
+  trois en 640x400 (6x6, 8x8, 8x16) et deux en 640x200 (6x6, 8x8).
+- cfg.small_font (booleen) devient cfg.font_idx : un indice dans la liste
+  des tailles relevees, -1 = celle des menus. display.c expose la liste
+  (dsp_font_count / dsp_font_name / dsp_font_current).
+- src/dialog.c : vrai dialogue GEM a la place de l'empilement de
+  form_alert. Arbre d'objets monte en memoire, sans fichier .RSC (un .RSC
+  absent ou mal place est la premiere cause de plantage d'un accessoire).
+  Contenu : frequence CPU et indice, boutons radio de vitesse
+  (8 / 16 / 24 MHz selon la carte), boutons radio de taille de police,
+  case de fermeture facon fenetre en haut a gauche, Annuler et OK.
+  La croix et Annuler ferment sans rien appliquer ; tout est applique en
+  une fois sur OK.
+- Pas de liste deroulante : menu_popup() n'existe qu'a partir de l'AES 3.3
+  et manque sur le TOS 2.06 vise. Avec trois tailles au plus, les boutons
+  radio sont de toute facon plus lisibles.
+- Largeur du dialogue calibree sur 38 caracteres, pour tenir aussi en
+  320x200 ou l'ecran n'en fait que 40.
+- make dlgtest : DLGTEST.ACC ouvre le dialogue au demarrage, pour le
+  controler sous Hatari sans cliquer dans le menu Bureau. Jamais livre.
+- Valide sous Hatari : dialogue correct en 640x400 (trois polices) et en
+  640x200 (deux), boutons de vitesse presents sur MegaSTE et remplaces
+  par "pas de bascule ici" sur STE, rendu de la barre en 6x6 verifie,
+  trait de separation intact, STRESS toujours a calls=300 / remove -> 0.
+- Taille apres ajout du dialogue : CLOCKPNL.ACC 15 649 octets.
+
+2026-09-23
+- Releves sur la machine reelle (STE + TwiSTEr en 68020, boost et cache
+  enclenches), logs dans EMU/ et TOS/ :
+  * SPEEDTST, EmuTOS et TOS 2.06 : les six passes et les quatre etats du
+    registre classent JUSTE. Mesures brutes 21,1 a 24,5 -> 24, et 7,0 a
+    7,7 -> 8. Le classement vers la frequence nominale fait exactement ce
+    qu'on lui demande ; l'ecart min-max brut atteint 2,1 MHz.
+  * Confirme une fois de plus : le bit 0 de $FF8E21 (cache) ne change
+    rien sur cette carte (23,1 sans cache contre 22,9 avec).
+  * DISKTST sur C: : recsiz=8192, handler installe puis retire, vecteur
+    hdv_rw rendu a l'identique (6139750 -> 6269210 -> 6139750).
+  * FONTTST : metriques IDENTIQUES a celles de Hatari (gl 8x16, tailles
+    natives 6x6 / 8x8 / 8x16, puis 12x12 / 16x16 / 16x32 mises a
+    l'echelle). La correction de choix de police vaut donc telle quelle
+    sur la machine reelle.
+- STRESS tentait toujours A:, vide la plupart du temps : il s'arretait sur
+  "Getbpb(0) NULL" sans rien verifier. Il prend maintenant C: par defaut,
+  et se rabat sur A: si C: n'a pas de BPB (cas du disque GEMDOS de Hatari).
+  Meme repli pour DISKTST. La lettre reste imposable en argument.
+- STRESS controle desormais que le secteur tient dans son tampon avant de
+  lire, comme DISKTST : les 8192 octets de la partition C: de la machine
+  de test avaient deja fait planter l'ancienne version.
+- La lecture de l'argument passe dans tlog.c (targ_drive), partagee par
+  les deux outils, et respecte l'octet de longueur de la queue de
+  commande. Verifiee sur table de cas.
+
+2026-09-23 (suite) - releves MagiC, logs dans MGC/
+- SPEEDTST : les six passes et les quatre etats du registre classent tous
+  JUSTE (21,1 -> 24 ; 7,0 et 7,3 -> 8). Mesure tres stable, ecart min-max
+  0,3 MHz, mais c'est l'environnement au biais le plus fort des trois :
+      TOS 2.06   23,2 a 24,5  soit  -3 a  +2 %
+      EmuTOS     21,1 a 23,2  soit -12 a  -3 %
+      MagiC      21,1 a 21,4  soit -12 a -11 %
+  Le classement absorbe tout cela sans peine ici : il faudrait -28 % pour
+  confondre 24 et 16.
+- LIMITE CONNUE du classement, a garder en tete pour le Falcon et au-dela.
+  Le biais tolere avant de basculer sur la frequence nominale inferieure
+  se resserre quand l'echelle monte :
+      24 MHz : -28 %     32 MHz : -19 %     40 MHz : -14 %
+      50 MHz : -14 %     66 MHz : -19 %     80 MHz : -11 %
+  Les -12 % de MagiC restent donc confortables jusqu'a 32 MHz, mais pas
+  au-dela. Sur une machine rapide il faudra soit un reglage explicite de
+  la frequence, soit une table de frequences propre a la carte.
+- DISKTST sous MagiC : identique a EmuTOS et TOS. recsiz=8192, handler
+  installe puis retire, vecteur hdv_rw rendu a l'identique
+  (392964 -> 646726 -> 392964).
+- FONTTST sous MagiC : metriques identiques aux deux autres systemes et a
+  Hatari. Les trois tailles natives 6x6 / 8x8 / 8x16 sont donc les memes
+  partout sur cette machine.
+- STRESS : meme arret sur "Getbpb(0) NULL" que sous EmuTOS et TOS, le
+  lecteur A: etant vide. Deja corrige le meme jour (C: par defaut).
+  Reste a rejouer dans les trois systemes.
+
+2026-09-23 (suite) - STRESS valide, et trois defauts rapportes par jym
+- STRESS passe maintenant dans les trois systemes (EMULSTR.TXT,
+  MGCLSTR.TXT, TOSLSTR.TXT) : 300 lectures sur C:, rd=300, rd_drv=300,
+  map=4, remove -> 0. Les 6 appels en plus (calls=306) sont les ecritures
+  du fichier de trace lui-meme, reouvert a chaque ligne.
+- Corrige : en .APP, le programme ne rendait jamais la main - souris en
+  abeille, bureau jamais revenu. Rien ne permettait de se terminer : la
+  boucle n'attendait qu'AP_TERM, qui n'arrive pas sous AES mono-tache, et
+  le menu Bureau est reserve aux accessoires. Desormais, en application :
+  la fleche est retablie (graf_mouse), le dialogue s'ouvre au demarrage
+  avec un bouton QUITTER en plus, et si l'AES est mono-tache - ou a refuse
+  le menu_register - on se termine des que ce dialogue se referme. En
+  accessoire, rien ne change.
+- sys.multi : cookies MiNT, MagX, MgMx et MgPC, pour savoir si une
+  application a droit au menu Bureau.
+- Corrige : a 8 MHz l'affichage decalait le graphique. Le bloc est cale a
+  droite, et "8MHz" fait un caractere de moins que "00:00" ; a 24 MHz les
+  deux font cinq, d'ou un defaut invisible jusqu'ici. La frequence est
+  maintenant cadree a droite sur la largeur de l'heure (TIME_CELLS).
+  Verifie au pixel pres sous Hatari : les colonnes 560 a 597 de la barre
+  sont identiques que l'on affiche l'heure ou la frequence.
+- Corrige : la case de fermeture n'etait pas cliquable en son milieu.
+  objc_find() rend l'objet le plus PROFOND sous la souris : le carre noir
+  interieur, non selectionnable, avalait les clics, et seul le pourtour
+  repondait. Les deux rectangles sont maintenant selectionnables et
+  sortants, et tous deux valent Annuler.
+
+2026-09-25
+- Menage : 000CLOCK.TOS et CENTBNCH.APP retires du depot. Ce sont des
+  binaires tiers, presents en double dans les archives de jym :
+    ~/Downloads/Atari/Programs/68000/OUTILS/TWISTER/SHOW.MHZ/000CLOCK.TOS
+    ~/Downloads/Atari/Programs/68030/OUTILS/BENCH/CENTBNCH.APP
+  Tout ce qu'on avait a tirer de 000CLOCK.TOS (methode differentielle de
+  C. Zietz) est dans src/probe.S et src/mhz.h, commentaires compris.
+  CENTBNCH.APP reste la reference pour le 68030, a rouvrir le jour ou on
+  calibrera la constante Falcon.
+- Les logs bruts des campagnes de test (EMU/, TOS/, MGC/, *LSTR.TXT) ont
+  ete supprimes par jym. Toutes les valeurs qui comptent sont deja dans ce
+  ChangeLog ; seul le releve de police, qui justifie la regle de choix de
+  taille, est reproduit ci-dessous pour ne pas dependre d'un fichier.
+
+  FONTTST, STE + TwiSTEr, 640x400, identique sous EmuTOS / MagiC /
+  TOS 2.06 et sous Hatari :
+
+    gl_wchar=8  gl_hchar=16  gl_wbox=19  gl_hbox=19
+
+    vst_point(1..8)   -> cell  6x6     native
+    vst_point(9)      -> cell  8x8     native
+    vst_point(10..15) -> cell  8x16    native, police des menus
+    vst_point(16,17)  -> cell 12x12    mise a l'echelle, PLUS LARGE
+    vst_point(18,19)  -> cell 16x16    mise a l'echelle
+    vst_point(20)     -> cell 16x32    mise a l'echelle
+
+  C'est la ligne 12x12 qui justifie tout : plus BASSE que 8x16 mais plus
+  LARGE, elle etait retenue comme "plus petite" et donnait une police
+  visiblement plus grosse. D'ou le critere sur les deux dimensions.
+
+2026-09-25 (suite)
+- MEMTST.TOS : releve des sources de memoire disponible (phystop, ramtop,
+  ramvalid, _FRB, Malloc(-1), Mxalloc(-1, 0/1/2)) pour decider s'il faut
+  separer ST-RAM et memoire alternative a l'affichage. Aucune allocation.
+  Mxalloc n'est appele qu'a partir du TOS 1.04.
+- Mesure de la hauteur de la barre de menu, qui tranche l'idee des deux
+  lignes de texte : gl_hbox = 19 en 640x400, mais seulement 11 en 320x200
+  et 640x200. Deux lignes de 6x6 (12 pixels) ne tiennent que sur un ecran
+  monochrome. L'affichage sur deux lignes est donc ecarte au profit de la
+  substitution pendant l'appui sur Alternate.
+
+2026-09-25 (suite) - releves memoire sur la machine reelle
+- Surprise utile : le STE de jym A de la memoire alternative. Sous EmuTOS,
+  6522 Ko libres en RAM rapide TwiSTEr contre 3901 Ko de ST-RAM.
+- CORRECTION d'une hypothese fausse : ramtop ($5A4) vaut 0 alors que la
+  memoire alternative existe. Le pilote de la carte la declare par
+  Maddalt(), ce qui ne renseigne pas ramtop. La detection doit donc se
+  faire sur Mxalloc(-1, 1) > 0, jamais sur ramtop.
+- Confirme qu'un chiffre unique induirait en erreur : Malloc(-1) rend
+  6522 Ko, c'est-a-dire le bloc de RAM RAPIDE, alors que seuls 3901 Ko de
+  ST-RAM sont disponibles pour un programme qui l'exige. Il faut donc deux
+  valeurs sur les machines qui ont de la memoire alternative, une seule
+  sinon.
+- Sous MagiC, sur la meme machine : Mxalloc(-1,1) rend 0 et Malloc(-1) ne
+  voit que la ST-RAM, alors que le cookie _FRB est present - donc le
+  pilote a bien tourne. Piste : sous MagiC un Maddalt() ne porte que s'il
+  a lieu APRES le chargement du noyau ; execute avant, il s'adresse au
+  GEMDOS du TOS que MagiC remplace, et la memoire est perdue tandis que le
+  cookie subsiste. A verifier dans l'ordre du dossier AUTO.
+- MEMTST alloue maintenant 64 Ko (aussitot liberes) dans chaque mode et
+  affiche l'ADRESSE obtenue : au-dessus de phystop, c'est de la memoire
+  alternative. C'est le seul test qui tranche quand Mxalloc(-1, 1) ment.
+
+2026-09-26
+- Nouvelle regle de travail : les binaires a tester vont desormais dans le
+  repertoire commun ~/Downloads/ToTest/, avec la liste des tests dans
+  todo_clockpanel.txt. Le ToTest/ du depot est supprime. "make totest"
+  efface nos propres fichiers un par un avant de recopier : le repertoire
+  est partage avec d'autres projets, dont les fichiers ne doivent pas
+  disparaitre. La liste des tests est tenue dans TODO_TESTS.txt, versionne
+  avec les sources, et recopiee sous son nom de destination.
+
+2026-09-27
+- Presentation visee arretee avec jym, consignee dans README.txt :
+
+    normal     [graphique CPU]  hh:mm
+    Alt tenu   [graphique reseau]  [graphique disque]
+    survol     panneau texte : memoire libre, frequence, switch de vitesse
+
+  Alt ECHANGE le contenu des deux emplacements de la barre, comme il
+  remplace deja l'heure par la frequence : une seule rangee, on ne sort
+  jamais de la barre. Chaque graphique n'apparait que si sa source existe
+  (CPU sous FreeMiNT, reseau avec STinG ou MintNet, disque partout).
+- Seul le panneau de survol sort de la barre, et c'est donc le seul
+  mecanisme nouveau : sauvegarde et restitution du fond par vro_cpyfm,
+  detection par evnt_multi/MU_M1, ~400 ms avant ouverture, switch gere a
+  la main plutot que par form_do() qui est modal.
+- Alt n'a pas besoin de temporisation : l'echange sur place est discret.
+  (Une premiere version de cette note envisageait une rangee SOUS la
+  barre ; jym a corrige, les graphiques restent dans la barre.)
+- Conséquence notable : l'historique doit continuer a tourner meme cache,
+  seul le dessin est saute. Sur un ST/STE sans MiNT ni reseau,
+  l'accessoire devient donc PLUS LEGER qu'aujourd'hui en usage normal.
+- Ordre de travail retenu : panneau de survol, puis bascule Alt, puis
+  charge CPU (FreeMiNT), puis reseau apres un NETTST.TOS de
+  reconnaissance.
+- Question de jym : le panneau de survol portant les switchs, peut-on
+  abandonner l'accessoire au profit d'un PRG lance au boot, pour liberer
+  un des six emplacements d'ACC ? NON sous TOS mono-tache : un PRG d'AUTO
+  s'execute avant le demarrage de l'AES (appl_init echoue, ni VDI ni barre
+  de menu), et lance plus tard il monopolise la machine. L'accessoire est
+  le seul moyen d'etre resident et d'utiliser GEM sous TOS 2.06 et EmuTOS.
+  Sous MagiC et MiNT, le .APP existant le permet deja sans code nouveau.
+  Nuance a retenir : les 6 accessoires CHARGES et les LIGNES du menu
+  Bureau sont deux limites distinctes ; ne pas appeler menu_register rend
+  une ligne, pas un emplacement de chargement.
+- Le switch de police ira lui aussi dans le panneau de survol.
+
+2026-09-28
+- Corrige : en .APP sous TOS 2.06 et EmuTOS, une entree de caracteres
+  aleatoires apparaissait dans le menu Bureau. On appelait menu_register()
+  sans condition ; sous AES mono-tache l'application se termine en
+  refermant son dialogue, et l'entree restait a pointer sur sa memoire
+  liberee. menu_unregister() n'existant qu'a partir de l'AES 3.3, on ne
+  peut pas nettoyer apres coup : l'inscription est desormais reservee a
+  l'accessoire et aux applications sous AES multitache (is_acc ||
+  sys.multi). Verifie sous Hatari : plus aucune entree.
+- dsp_close() rend maintenant la barre telle qu'on l'a trouvee, en
+  effacant notre emprise (jamais le trait de separation de l'AES). Sans
+  cela l'heure restait affichee apres la fin d'une application, jusqu'au
+  prochain redessin du bureau. Et le redessin final est saute quand on
+  sait deja qu'on va se terminer : l'horloge n'apparait plus une
+  demi-seconde pour rien.
+- MagiC voit desormais la memoire alternative, apres correction par jym de
+  son programme de declaration. Releve confirme des deux cotes :
+      Mxalloc(-1,0) ST  = 3591 Ko     allocation reelle -> ST-RAM
+      Mxalloc(-1,1) alt = 7881 Ko     allocation reelle -> ALTERNATIVE
+      Malloc(-1)        = 7881 Ko     c'est-a-dire la RAM RAPIDE
+  Mxalloc(-1, 1) > 0 est donc bien le detecteur, sous EmuTOS comme sous
+  MagiC, et Malloc(-1) seul tromperait : il annonce 7,8 Mo quand seuls
+  3,6 Mo de ST-RAM sont disponibles. Deux valeurs confirmees necessaires.
+- TOS 2.06 donne le meme verdict qu'EmuTOS et MagiC : ST 3853 Ko,
+  alternative 6299 Ko, et Malloc(-1) rend la RAM RAPIDE. Les trois
+  systemes se comportent identiquement, la question memoire est close.
+- .APP revalide par jym sous TOS et EmuTOS : plus d'entree parasite dans
+  le menu Bureau, plus d'horloge fugitive.
+- Couche memoire ecrite : sys.alt_ram, sys.tos, sys_mem() et u_mem().
+  * detection par Mxalloc(-1, 1) > 0, jamais par ramtop ;
+  * Mxalloc n'est appele qu'a partir du TOS 1.04, repli sur Malloc(-1) ;
+  * u_mem() rend cinq caracteres au plus : "898K", "3.8M", "15.9M".
+  La valeur est affichee dans le dialogue de configuration, ou elle est
+  verifiable tout de suite ; le panneau de survol la reutilisera.
+  Verifie sous Hatari : "866K ST" sur MegaSTE 1 Mo sans memoire
+  alternative, "864K ST + 15.9M rapide" sur Falcon avec 16 Mo de TT-RAM
+  (--ttram 16 --addr24 off, le 24 bits interdisant la TT-RAM).
+- OBSERVATION a confirmer sur le vrai Falcon : sous Hatari, un Falcon
+  annonce a 16 MHz est mesure a 24 MHz par l'accessoire. La constante
+  68030 (2640, reprise du 68020) serait donc fausse - mais la
+  temporisation 68030 de Hatari n'est pas fidele, donc l'emulateur est
+  tout aussi suspect. Seule la machine reelle tranchera.
+- src/panel.c : panneau de survol, le seul element qui sort de la barre.
+  Trois lignes - memoire libre, frequence avec son switch, taille de
+  police avec le sien - dessinees sur le bureau apres sauvegarde du fond
+  par vro_cpyfm, restitue en partant. Detection par evnt_multi/MU_M1,
+  ~400 ms de temporisation avant ouverture, repli automatique au bout de
+  10 s pour ne jamais garder l'ecran reserve.
+  * BEG_MCTRL en plus de BEG_UPDATE : sans lui un accessoire qui n'est pas
+    au premier plan ne recoit aucun evenement bouton, et les zones
+    seraient inertes. C'est ce que fait un menu deroulant.
+  * Les clics sont testes a la main (quatre zones) plutot que par
+    form_do(), modal et qui monopoliserait l'AES.
+  * Le panneau referme AVANT d'appliquer un changement : changer la police
+    rouvre la station VDI, ce qui invaliderait le fond sauvegarde.
+  * Le texte des boutons actifs se trace en MD_TRANS : en MD_REPLACE le
+    VDI repeint toute la cellule, effacant le fond noir du bouton et
+    rendant son texte blanc invisible.
+  * dsp_vdi_state() et dsp_use_menu_font() : le panneau dessine avec la
+    police des MENUS et doit remettre l'etat du rendu de la barre en
+    partant, dsp_update() ne reprogrammant que la couleur.
+  * Tant que le panneau est affiche, la barre n'est pas redessinee :
+    dsp_update() prend wind_update() de son cote et l'imbrication n'est
+    pas fiable sur tous les AES. L'historique, lui, continue d'avancer.
+- PIEGE COUTEUX, deux heures perdues : MO_ENTER vaut 0 et MO_LEAVE vaut 1,
+  l'inverse de ce que la lecture suggere. Intervertis, le panneau
+  s'ouvrait des le demarrage par-dessus un bureau a moitie dessine, dont
+  il restituait ensuite le fond perime - l'horloge disparaissait et le
+  bureau semblait corrompu. Les constantes nommees sont maintenant
+  utilisees, avec un avertissement dans le code.
+- make pnltest : PNLTEST.ACC affiche le panneau au demarrage et ignore la
+  sortie, Hatari ne sachant pas amener la souris sur le coin. Jamais
+  livre. Rendu verifie en 640x400 (MegaSTE) et sur Falcon VGA avec 16 Mo
+  de TT-RAM : "Libre 864K ST + 15.8M rap." tient dans les 30 caracteres.
+- Le survol ne se detecte PLUS par l'evenement de rectangle MU_M1 : sur la
+  machine de jym, la zone qui declenchait etait une bonne largeur plus a
+  gauche, dans une partie vide de la barre. Le rectangle transmis etait
+  pourtant exact - journalise sur la machine reelle : x=564 y=0 w=76 h=19,
+  pile sur le graphique et l'heure - et le binding de gemlib aussi,
+  verifie au desassemblage (int_in[5..8] recoivent bien In1X/Y/W/H).
+  Cause non elucidee. Plutot que de continuer a deviner, la position de la
+  souris est lue par graf_mkstate() a chaque top : aucune ambiguite, et
+  une lecture toutes les 200 ms est sans effet mesurable. MU_BUTTON reste
+  utilise, mais seulement quand le panneau est ouvert, donc quand on tient
+  BEG_MCTRL.
+- Retour de jym sur le panneau : tout fonctionnait deja - clics, switch de
+  vitesse, switch de police, restitution du fond - seule la zone de
+  declenchement etait mal placee. BEG_MCTRL est donc valide.
+- Bascule Alternate mise en place, deuxieme etape du plan. La barre a deux
+  etats :
+      au repos        l'heure
+      Alternate tenu  le graphique d'E/S disque a la place de l'heure
+  La FREQUENCE N'EST PLUS DANS LA BARRE : elle est passee dans le panneau
+  de survol et dans le dialogue, comme convenu. Le graphique n'est donc
+  plus affiche en permanence : sur une machine sans FreeMiNT ni pile
+  reseau, la barre ne montre que l'heure, ce qui la rend aussi plus legere
+  (plus de defilement chaque seconde, seul l'historique continue).
+  Les emplacements du graphique de charge CPU et du graphique reseau sont
+  prevus mais vides tant que ces sources n'existent pas.
+- cfg.mhz_on_key supprime ; cfg.hot_shift devient le masque qui revele les
+  graphiques d'E/S.
+- make verify (CPNL_FORCE_MHZ) n'avait plus d'objet, la frequence ne
+  passant plus par la barre : remplace par make altest (CPNL_FORCE_IOKEY),
+  qui fige la barre dans l'etat "Alternate tenu" puisque Hatari ne sait pas
+  maintenir une touche. Verifie : au repos l'heure seule, touche tenue le
+  graphique seul, aux memes pixels.
+
+2026-09-28 (suite) - audit empreinte memoire et CPU, a la demande de jym
+- CPU : mesure, pas estimee. Banc CPUTST.PRG (application GEM qui travaille
+  en continu et rend la main toutes les 20 ms) compare a un accessoire
+  TEMOIN, NULLACC.ACC, qui fait la meme boucle evnt_multi a 200 ms et rien
+  d'autre. Sous Hatari, STE 68000 a 8 MHz, 10 s :
+      temoin        25344 tours
+      ClockPanel    25232 tours   (-0,44 %)  avant l'audit
+      ClockPanel    25328 tours   (-0,06 %)  apres
+  La resolution du banc est d'environ 1 % : le cout de ClockPanel est
+  indiscernable du bruit. Rien a gagner cote CPU.
+  PIEGE du premier banc : sans AUCUN accessoire charge, evnt_timer(0)
+  emprunte un chemin d'attente plus lent de l'AES, et on mesurait 20 % de
+  travail EN MOINS qu'avec ClockPanel. D'ou le temoin, qui seul donne une
+  comparaison honnete. Compter des tours bornes par evnt_timer mesure par
+  ailleurs la cadence de l'AES (50/s), pas le CPU.
+- MEMOIRE : 31 088 -> 26 086 octets residents (-5 Ko).
+  gcc -fstack-usage a montre que le binding v_gtext de libgem reserve
+  2104 octets de pile A CHAQUE APPEL (un tableau de 1024 mots pour
+  convertir la chaine) : a lui seul il imposait la pile de 8 Ko. Remplace
+  par dsp_gtext(), binding maison a tableaux statiques de 64 mots, sur un
+  appel VDI brut (cpnl_vdi dans probe.S). La chaine d'appels la plus
+  profonde tombe a environ 1 Ko, et la pile passe de 8 Ko a 3 Ko.
+  Sur 68000 les traps AES/VDI/BIOS/GEMDOS et les interruptions basculent
+  sur la pile superviseur : seuls nos cadres C occupent la notre.
+- Examine et laisse en l'etat :
+  * le tampon du panneau (1,8 Ko en monochrome, ~30 Ko en true color) est
+    alloue au demarrage et pas a l'ouverture : un Malloc fait plus tard par
+    un accessoire est attribue a l'application au premier plan, et libere
+    avec elle. L'eviter tout a fait supposerait de faire redessiner le
+    fond par form_dial(FMD_FINISH), au prix d'un redessin des fenetres ;
+  * les 2 Ko de vdi_dummy et les autres tableaux de libgem : inevitables
+    sans reecrire tous les bindings VDI ;
+  * dlg_open, 2,8 Ko de code, rarement execute : un gain de ~1,5 Ko
+    possible en le rendant tabulaire, jugé pas rentable.
+- make cputst : CPUTST.PRG et NULLACC.ACC. Jamais dans ToTest/.
+
+2026-09-29
+- Valide par jym sur le STE reel : zone de survol desormais au bon
+  endroit (graf_mkstate), bascule Alternate heure <-> graphique disque,
+  binding texte maison et pile reduite a 3 Ko. Restent le .APP sous MagiC
+  et les tests Falcon.
+
+2026-09-29 (suite) - graphiques de charge CPU et de trafic reseau
+- src/net.c : trafic reseau, deux piles.
+  * STinG : OCTETS, lus comme le fait la CLI de STinG-LW de jym : cookie
+    'STiK' -> DRV_LIST -> get_dftab("MODULE_LAYER") -> table STX ->
+    query_chains() -> chaine des ports, somme de stat_rcv_data et
+    stat_sd_data sur les ports actifs, hors boucle locale (L_INTERNAL) et
+    hors NAT (L_MASQUE, double compte). Les compteurs sont tenus a jour
+    par le noyau lwIP (sting/kernel.c).
+  * MintNet : PAQUETS seulement - rien dans /kern. Socket (Fsocket), puis
+    SIOCGIFCONF pour enumerer, SIOCGIFSTATS pour les compteurs, hors lo*.
+  * PIEGE : SIOCGIFCONF rend une entree par ADRESSE, pas par interface ;
+    sous FreeMiNT lo0 y figure deux fois. Dedoublonnage par nom, sans
+    lequel une carte a deux adresses serait comptee deux fois.
+  * cpnl_cdecl3 (probe.S) : appel vers STinG qui marche avec les deux
+    conventions. STinG d'origine (Pure-C) rend les pointeurs dans A0
+    seulement et detruit D2/A2 ; la version gcc de jym les rend dans A0
+    et D0. On lit A0 et on sauvegarde tout.
+  * Dispositions verifiees a la compilation (_Static_assert) : DRV_LIST,
+    table STX, descripteur de port, ifreq de 36 octets.
+- NETTST.TOS : outil de reconnaissance - pile trouvee, ports ou interfaces
+  avec leurs compteurs, trafic seconde par seconde pendant 15 s. "NETTST Q"
+  n'attend pas de touche a la fin. Valide sous Hatari :
+      TOS nu            "aucune"
+      STinG-LW de jym   "STinG (octets)", port Internal ignore
+      FreeMiNT          "MintNet (paquets)", lo0 ignore
+- Graphiques generalises : trois instances de la meme mecanique (disque,
+  reseau, CPU), toutes alimentees en permanence. La barre a deux
+  emplacements :
+      au repos        [charge CPU]  heure
+      Alternate tenu  [reseau]      [disque]
+  chacun n'apparaissant que si sa source existe. Echelles : disque 8 Ko/s
+  a 1 Mo/s ; STinG 256 o/s a 32 Ko/s ; MintNet 1 a 128 paquets/s ; CPU
+  lineaire, toute charge non nulle visible. La charge CPU est une barre
+  simple montant du bas ; disque et reseau restent des papillons.
+- Le texte "%id" disparait de la barre : compose() appelait
+  sys_idle_percent(), donc ouvrait /kern/uptime, A CHAQUE TOP de 200 ms.
+  Le graphique l'echantillonne une fois par seconde.
+- CHARGE CPU SOUS AES DU TOS : sous FreeMiNT avec l'AES en ROM, le
+  graphique etait PLEIN - 100 % en permanence. La lecture de /kern/uptime
+  est juste (verifie : 85 % d'idle pendant un Fselect de 1 s) ; c'est
+  l'AES du TOS qui attend en boucle active, si bien que le processus idle
+  de MiNT ne tourne jamais. Le graphique n'est donc affiche que sous un
+  AES multitache. Verifie sous FreeMiNT + XaAES : charge basse et
+  variable, realiste.
+- sys.multi se fiait au cookie MiNT, et se trompait dans ce meme cas
+  (FreeMiNT + AES du TOS est mono-tache). Remplace par le test canonique
+  aes_global[1] (applications simultanees : 1 mono-tache, -1 multitache),
+  plus les cookies de MagiC par prudence. Corrige au passage le .APP sous
+  FreeMiNT + AES du TOS, qui se serait cru autorise au menu Bureau.
+- test/mkfloppy.py : sous-repertoires (source=AUTO/X.PRG) et image 1,44 Mo
+  (--hd). test/mintdisk.sh : disquette FreeMiNT + XaAES + MintNet +
+  accessoire, recette commentee (pourquoi disquette, 4 Mo, XaAES,
+  xaaes000.km, moose.adi).
+
+2026-09-29 - premier releve reseau sur la machine reelle (NETTST, TOS 2.06)
+- Chaine STinG validee sur le materiel : port USBether trouve et compte
+  (2 335 965 octets recus, 40 846 emis depuis le demarrage), Internal
+  ignore.
+- Trafic de fond du reseau local, sans aucune application : 1 058 octets
+  recus toutes les 2 s tres regulierement, 78 octets une fois (ARP
+  probablement), rien d'emis. Avec la base actuelle de 256 o/s, ce bruit
+  monte a 3/8 de hauteur une colonne sur deux. A juger a l'ecran avant de
+  changer ; une base de 1 Ko/s le ramenerait a 2/8, un ping resterait a
+  1/8 et un wget a 80 Ko/s monterait vers 7/8.
+- Rappel d'usage : sous TOS mono-tache, l'accessoire ne tourne pas pendant
+  qu'un .TTP travaille. Un transfert apparait donc apres coup, en une
+  colonne au sommet. Le trace en direct demande MagiC ou Geneva.
+- Binaires de test deplaces dans ~/Downloads/ToTest/clockpnl/, a la
+  demande de jym. Ce sous-repertoire n'appartenant qu'a nous, "make
+  totest" le vide entierement avant copie. todo_clockpanel.txt reste a la
+  racine de ToTest/, comme les listes des autres projets.
+
+2026-10-09 - Falcon 030 reel, sous MagiC
+- L'accessoire fonctionne, lance depuis le bureau.
+- SPEEDTST : la constante 68030 (2640, reprise du 68020) est JUSTE.
+  Passes calmes 16,1 et 16,2 MHz bruts, puis 13,0 sur quatre passes
+  (-19 %, charge de fond reguliere de MagiC sur ce Falcon), toutes
+  classees 16. Les 24 MHz mesures sous Hatari etaient donc un defaut de
+  l'emulateur, comme suppose. Marge a 16 MHz : -46 % avant de basculer
+  sur 8. Plus rien de provisoire dans mhz.h.
+- FONTTST en 640x480 : metriques identiques au STE monochrome (cellule des
+  menus 8x16, natives 6x6 / 8x8 / 8x16, mises a l'echelle au-dela). La
+  regle de choix de police tient telle quelle.
+- MEMTST : 14 Mo de ST-RAM, aucune memoire alternative (Mxalloc mode 1 en
+  echec, toutes les allocations en ST-RAM). Une seule valeur affichee,
+  comme prevu.
+- DISKTST et STRESS sur C: (secteurs de 8 Ko) : hook installe puis retire,
+  vecteur rendu a l'identique, 300 lectures comptees, remove -> 0.
+- Idee notee, non demandee : le Falcon a sa propre bascule 8/16 MHz par
+  $FFFF8007, que le switch de vitesse ne gere pas (il ne connait que le
+  $FFFF8E21 du MegaSTE et des cartes acceleratrices).
+- .APP sous MagiC verifie par jym : l'entree ClockPanel apparait bien dans
+  le menu Bureau. Comme prevu dans ce cas, l'ouverture automatique du
+  dialogue au demarrage est supprimee sous AES multitache : le programme
+  demarre en silence, comme un accessoire, ce qui convient a un lancement
+  au boot ; Quitter reste accessible en ouvrant ClockPanel depuis le menu.
+  Sous AES mono-tache rien ne change : le dialogue reste la seule
+  interface, ouvert au demarrage, et le programme se termine en le
+  refermant (reverifie sous Hatari).
+
+2026-10-10
+- Graphique reseau vu en fonctionnement sur le STE par jym.
+- Couleurs des graphiques sur les ecrans d'au moins 4 couleurs (Falcon,
+  TT, ST basse/moyenne resolution), d'apres work_out[13] de v_opnvwk
+  (0 = true color, traite comme riche). Indices VDI standard : disque
+  lectures vert (3) / ecritures rouge (2) ; reseau reception bleu (4) /
+  emission magenta (7) ; CPU bleu (4). En 4 couleurs, vert/rouge partout.
+  La ligne de base reste noire. En monochrome, rendu inchange (un seul
+  rectangle). +417 octets. Verifie sous Hatari Falcon TOS 4.04 VGA avec
+  IOGEN.
+- Couleurs validees par jym sur le Falcon reel.
+
+2026-10-10 (suite)
+- Bascule 8/16 MHz du Falcon 030 : bit 0 de $FFFF8007, les autres bits
+  (blitter, bus STE) recopies tels quels. Pas sur Falcon accelere (_CPU
+  40/60). sys.mste_ctrl devient sys.spd_ctrl (SPD_NONE/MSTE/F030),
+  sys_mste_speed/set deviennent sys_speed_get/set ; cpnl_mste_val devient
+  cpnl_speed_val ; cpnl_f030_get/put dans probe.S. Le cache de frequence
+  de sys_mhz() suit le registre du Falcon comme celui du MegaSTE.
+- Raccourci Ctrl+Alt+Shift (l'un ou l'autre) : bascule lent/rapide, une
+  fois par appui, puis la frequence s'affiche 3 s a la place de l'heure.
+  Uniquement des touches de modification lues par Kbshift a chaque top :
+  pas de detournement du clavier (le Ctrl+Alt+/- du pave envisage aurait
+  demande un hook IKBD, et le SPEED.PRG du TwiSTEr l'utilise deja).
+  Alternate ne revele plus les graphiques que tenu SEUL.
+- Reglages sauvegardes dans X:\CLOCKPNL.INF, X = _bootdev : FONT=<nom>
+  (police retenue par son nom, la liste depend de la resolution ; vide =
+  menus) et BOOTFAST=0/1. Lu au demarrage, reecrit seulement quand la
+  police ou l'option change (OK du dialogue, police du panneau). Nouveau
+  src/config.c ; cfg.font_idx remplace par cfg.font_nm, dsp_font_set().
+- Option "rapide au boot" (case du dialogue, sous la vitesse) : passe en
+  rapide au demarrage si on n'y est pas deja.
+- make spdtest : demarre en lent, applique l'option, inverse BOOTFAST dans
+  le .INF puis ouvre le dialogue. Verifie sous Hatari Falcon TOS 4.04 :
+  BOOTFAST=0 -> 8 MHz (Hatari suit $FFFF8007), BOOTFAST=1 -> 16 MHz,
+  FONT=6x6 applique et conserve a la reecriture.
+- Taille : 24221 octets (+1,3 Ko).
+
+2026-10-10 (soir) - cout CPU sous MiNT + XaAES
+- Constat de jym sur le Falcon : jtop donne 11 % a clockpnl. Reproduit
+  sous Hatari (STE 8 MHz, FreeMiNT 1.19 + XaAES) avec make proftest :
+  l'accessoire ecrit toutes les 10 s son Prusage() sur la console de
+  l'hote par NatFeats (test/prof.S ; Prusage = 0x11E). Variantes PROF_xxx
+  pour retirer un poste. Mesures croisees avec le noyau d'origine
+  (echantillonne, multiples de 5 ms) et avec un noyau 68000 de la branche
+  cpu-accounting de jym (temps exact), compile dans /tmp sans toucher a
+  ses sources. test/mintdisk.sh : KERNEL=, NATFEATS=1 (le chargeur
+  cherche alors MINT.PRG).
+- Postes trouves (ms CPU par 10 s, noyau exact, STE 8 MHz) :
+    reveil a vide (evnt_multi sous XaAES)            215  incompressible
+    /kern/uptime ouvert/lu/ferme chaque seconde     ~270  -> ~50
+    net_poll MintNet (ioctl par interface) par top   ~120  -> ~30
+    graf_mkstate par top (survol)                     ~55  -> 0
+    redessin force toutes les 2 s                    ~110  -> ~40
+- Corrections :
+  * /kern/uptime reste ouvert ; Fseek(0) puis Fread (kernfs regenere le
+    contenu a chaque lecture).
+  * MintNet interroge une fois par colonne (1 s) au lieu de chaque top ;
+    STinG, qui se lit en memoire, reste a chaque top.
+  * Survol : position de la souris prise dans le retour d'evnt_multi
+    (mouse_x/mouse_y), plus de graf_mkstate.
+  * Kbshift lu une fois par top (kb_state) au lieu de trois ; Tgettime
+    une fois par seconde.
+  * Redessin force toutes les 5 s au lieu de 2.
+  * Pointeur masque pendant un dessin seulement s'il est pres de la
+    barre.
+- Resultat : noyau d'origine 990 -> 430 ms / 10 s (-57 %) ; noyau exact
+  ~650 -> 480. Il reste le reveil (215), le graphique CPU (~120 : lecture
+  50, dessin 70) et le reste du top (~140).
+- Falcon reel, noyau d'origine, jtop : clockpnl ~6 % (11 % avant).
+- Flash de l'heure toutes les 5 s (vu par jym, avec une bosse sur le
+  graphique CPU) : c'etait le redessin force, qui efface puis redessine.
+  Remplace par un PIXEL TEMOIN : un pixel noir qu'on vient de dessiner
+  (ligne de base du graphique, sinon un point du ':' de l'heure), relu
+  une fois par seconde par v_get_pixel ; s'il a change (barre de menu
+  redessinee par une application), on repeint SANS effacer (texte en
+  mode remplacement, graphique colonne par colonne) : pas de flash.
+  Pas de verification avec le pointeur pres de la barre. Repeinte de
+  securite toutes les 5 min seulement (elle coute ~110 ms sur un STE).
+  dsp_update(2) = repeindre sans effacer. Verifie sous Hatari TOS 2.06 :
+  le bureau efface la barre apres le chargement de l'accessoire, l'heure
+  revient seule. Cout sous MiNT inchange (~475 ms / 10 s, noyau exact).
+
+2026-10-12
+- Cout CPU sur le Falcon de jym (noyau 1-20-cur a comptabilite exacte,
+  XaAES + Thing, 16 MHz) : ~3,5 %. Banc Hatari Falcon : test/mintfalc.sh,
+  disquette 1,44 Mo avec le systeme 1-20-cur de ToTest/MINT, noyau
+  directement dans AUTO (avec --natfeats on le chargeur chercherait
+  MINT030H.PRG), XaAES seul ; make proftest.
+- Postes, ms CPU par 10 s, Hatari Falcon 16 MHz, VGA 16 couleurs :
+    reveil seul (evnt_multi sous XaAES, 5/s)      105
+    lecture /kern/uptime (1/s)                     10
+    Kbshift (5/s)                                   7
+    dessin du graphique CPU (defilement 1/s)       65
+    reste du top                                  ~18
+    total                                         205  (~2 % ; 3,5 % reel)
+  Le code C pese moins de 5 ms / 10 s (temps utilisateur hors VDI) :
+  rien a gagner en assembleur. Le cout est dans les appels AES, VDI et
+  GEMDOS (un trap ~0,3 ms sur le Falcon reel, README mint) et dans le
+  reveil XaAES.
+- Graphique uniforme : un graphique dont les 32 colonnes sont egales, et
+  deja affiche ainsi, ne change pas d'un pixel en defilant ; on ne le
+  redessine plus. C'est le graphique CPU d'une machine au repos : toute
+  charge sous 13 % vaut le niveau 1. GRAPH.shown retient la valeur
+  affichee (-1 = non uniforme ou inconnue), graph_settle() annule le
+  defilement, forget_screen() (dsp_open) oublie tout. Au repos :
+  205 -> 155 ms / 10 s (-25 %), barre identique au pixel pres.
+- Moins d'appels VDI par dessin : couleur de remplissage en cache
+  (fill_color), clipping pose une fois pour toutes sur la barre
+  (dsp_clip ; le panneau de survol le coupe pendant qu'il sauve, dessine
+  et restitue le fond), pixel temoin relu seulement apres un redessin
+  complet. Sous charge (graphique non uniforme) : ~205 -> ~195.
+- Verifie sous Hatari : rendu de la barre identique (heure + graphique
+  CPU sous MiNT), panneau de survol dessine sous TOS 4.04, et fond
+  restitue a sa fermeture (variante temporaire qui se referme seule).
+- Reste au repos : le reveil (105 sur 155). Cote ClockPanel, seul un
+  reveil moins frequent le baisse, au prix de la reactivite d'Alternate,
+  du raccourci et de CAPS. Cote XaAES, cBlock() appelle
+  check_queued_events() avant et apres le sommeil, et chacun refait
+  check_mouse() + vq_key_s() (xa_evnt.c, get_mbstate).
+
+2026-10-15
+- Signale par jym (XaAES + Thing) : la barre de menu est parfois
+  redessinee, le graphique repart de zero et l'heure ne revient qu'apres
+  plusieurs secondes. Sous XaAES, la barre est redessinee par le
+  proprietaire du menu (CE_redraw_menu, widgets.c) sur toute la largeur,
+  sans rien notifier aux autres : seul l'ecran peut nous l'apprendre.
+- Deux trous dans la detection par pixel temoin :
+  * Version d'avant le 12/10 : apres chaque defilement, le temoin etait
+    RELU, donc apres que vro_cpyfm eut decale la zone effacee. La
+    reference devenait le fond efface : effacement absorbe, jamais
+    detecte. Le graphique se reconstruisait par la droite (il "repart de
+    zero") et l'heure ne revenait qu'au changement de minute. Corrige
+    depuis le 12/10 (temoin relu seulement apres un redessin complet).
+  * Aucune verification tant que la souris etait a moins de bar_h + 32
+    pixels du haut de l'ecran : justement quand on se sert des menus de
+    Thing.
+- test/menutst.c (make menutst) : application qui echange sa barre de
+  menu toutes les 3 s, comme Thing en changeant d'application, et note
+  chaque echange sur la console de Hatari ; un PROF.ACC note chaque
+  reparation (prof_event, horloge 200 Hz). test/mintfalc.sh : SHELLPRG=
+  la lance comme bureau de XaAES. Version du 12/10 : reparation en
+  0,07 a 1 s.
+- Verification adaptative : a chaque top (200 ms) pendant 3 s apres une
+  activite de l'utilisateur (souris deplacee, bouton, touche de
+  modification : mouse_b vient d'evnt_multi), une fois par seconde
+  sinon. Lire a chaque top en permanence coutait 10 % de plus au repos
+  (155 -> 170 ms / 10 s) ; ainsi le repos reste a 155.
+- Pointeur : on ne saute plus la verification que s'il peut recouvrir le
+  temoin (32 pixels autour), plus dans toute la bande du haut.
+- Verification juste avant chaque defilement d'un graphique : on ne
+  decale jamais un coin efface.
+- Mesure (MENUTST, PROF_ATTENTION) : reparation en 15 a 195 ms, graphique
+  repeint avec tout son historique et heure revenue (capture).
+
+2026-10-15 (bis)
+- RENOMME : ClockPanel devient StatsBar, comme son equivalent sur Mac
+  (~/Documents/Dev/MacOS/statsbar) ; il fait bien plus que l'horloge.
+  * STATSBAR.ACC / .APP, nom AES "STATSBAR" (appl_find), reglages dans
+    X:\STATSBAR.INF, entree "  StatsBar" au menu Bureau, titre du
+    dialogue et alerte.
+  * src/cpnl.h -> src/statsbar.h ; symboles cpnl_ -> sbar_, macros
+    CPNL_ -> SBAR_ (SBAR_PROF, SBAR_TEST_PANEL...), SBAR_IDENT 'SBAR'.
+  * Identifiant XBRA du hook hdv_rw : 'CPNL' -> 'SBAR'.
+  * Traces des outils : C:\CPNL*.TXT -> C:\SBAR*.TXT ; NatFeats "SBAR".
+  * Repertoires : ~/Documents/Dev/Atari/statsbar, /tmp/statsbar,
+    ~/Downloads/ToTest/statsbar/ et todo_statsbar.txt.
+  Pas de lecture de secours de CLOCKPNL.INF : deux machines, un fichier
+  de deux lignes a renommer a la main (TODO_TESTS, point 0).
+- Verifie sous Hatari : toutes les cibles compilent sans avertissement ;
+  TOS 4.04, dialogue "StatsBar" et STATSBAR.INF ecrit a la racine de C: ;
+  MiNT + XaAES + MENUTST, lignes "SBAR" et reparations.
+- Depot git : ~/Downloads/github/atari-statsbar (separate-git-dir, le
+  repertoire de travail reste ici), remote
+  git@github.com:jymoulin/atari-statsbar.git, branche main.
